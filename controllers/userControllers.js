@@ -42,3 +42,78 @@ exports.postUser = async (req, res) => {
     }
   });
 };
+
+//post email confirmation
+exports.postEmailConfirmation = (req, res) => {
+  //at first find the valid or matching token
+  Token.findOne({ token: req.params.token })
+    .then((token) => {
+      if (!token) {
+        return res
+          .status(400)
+          .json({ error: "invalid token or token may have expried" });
+      }
+      //if we found the valid token then find the valid user for that token
+      User.findOne({ _id: token.userId })
+        .then((user) => {
+          if (!user) {
+            return res
+              .status(400)
+              .json({
+                error: "we are unable to find the valid user for this token",
+              });
+          }
+          //check if user is already verified or not
+          if (user.isVerified) {
+            return res
+              .status(400)
+              .json({
+                error: "Email is already verified, please login to continue",
+              });
+          }
+          //save the verified user
+          user.isVerified = true;
+          user
+            .save()
+            .then((user) => {
+              if (!user) {
+                return res
+                  .status(400)
+                  .json({ error: "failed to verify the email" });
+              }
+              res.json({
+                message: "congrats, your email has been verified successfully",
+              });
+            })
+            .catch((err) => {
+              return res.status(400).json({ error: err });
+            });
+        })
+        .catch((err) => {
+          return res.status(400).json({ error: err });
+        });
+    })
+    .catch((err) => {
+      return res.status(400).json({ error: err });
+    });
+};
+
+//signin process
+exports.signIn=async(req,res)=>{
+  const{email,password}=req.body
+  //at first check if email is register in the system or not 
+  const user=await User.findOne({email})
+  if(!user){
+    return res.status(503).json({error:'sorry the email you provided is not found in our system ,register first or try again'})
+  }
+  //if email is found then check the password for that email
+  if(!user.authenticate(password)){
+    return res.status(400).json({error:'email and password doesnot match'})
+  }
+  //check if user is verified or not 
+  if(!user.isVerified){
+    return res.status(400).json({error:'verify email first to continue'})
+  }
+  res.send(user)
+
+}
