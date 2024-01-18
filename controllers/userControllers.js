@@ -2,6 +2,8 @@ const User = require("../models/userModel");
 const Token = require("../models/tokenModel");
 const crypto = require("crypto");
 const sendEmail = require("../utils/setEmail");
+const jwt=require('jsonwebtoken') //authentication
+const {expressjwt}=require('express-jwt')
 
 //to register user
 exports.postUser = async (req, res) => {
@@ -114,6 +116,37 @@ exports.signIn=async(req,res)=>{
   if(!user.isVerified){
     return res.status(400).json({error:'verify email first to continue'})
   }
-  res.send(user)
+  //NOW GENERATE TOKEN WITH USER ID AND JWT SECRET
+  const token=jwt.sign({_id:user._id},process.env.JWT_SECRET)
+  //store token in the cookie
+  res.cookie('myCookie',token,{expire:Date.now()+99999})
+  //return user information to frontend
+  const{_id,name,role}=user
+  return res.json({token,user:{name,role,email,_id}})
+}
 
+//forget password
+exports.forgetPassword=async(req,res)=>{
+  const user=await User.findOne({email:req.body.email})
+  if(!user){
+    return res.status(503).json({error:'sorry the email you provided is not found in our system ,register first or try again'})    
+  }
+  let token = new Token({
+    token: crypto.randomBytes(16).toString("hex"),
+    userId: user._id
+  })
+  token=await token.save()
+  if (!token) {
+    return res.status(400).json({ error: "failed to create a token" });
+  }
+   //send email process
+   sendEmail({
+    from: "no-reply@ecommerce.com",
+    to: user.email,
+    subject: "Password Reset Link",
+    text: `Hello,\n\n Please reset your password by click in the below link:\n\n 
+    http:\/\/${req.headers.host}\/api\/resetpassword\/${token.token} `,
+    //http://localhost:8000/api/resetpassword/456789
+  })
+  res.json({message:'password reset link has been sent successfully'})
 }
